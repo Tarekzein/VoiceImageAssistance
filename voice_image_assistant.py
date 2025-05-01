@@ -2,8 +2,8 @@ import os
 import cv2
 import numpy as np
 import speech_recognition as sr
-import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import IsolationForest
 import librosa
 import sounddevice as sd
 import soundfile as sf
@@ -19,10 +19,6 @@ class VoiceImageAssistant:
         self.scaler = StandardScaler()
         self.is_trained = False
         self.sample_rate = 44100
-        
-        # Configure TensorFlow
-        tf.config.threading.set_intra_op_parallelism_threads(1)
-        tf.config.threading.set_inter_op_parallelism_threads(1)
         
     def record_voice(self, duration=5):
         """Record voice for training or recognition"""
@@ -77,26 +73,11 @@ class VoiceImageAssistant:
         
         self.voice_features = np.array(features)
         self.scaler.fit(self.voice_features)
+        features_scaled = self.scaler.transform(self.voice_features)
         
-        # Create a simple neural network for voice verification
-        self.voice_model = tf.keras.Sequential([
-            tf.keras.layers.Dense(64, activation='relu', input_shape=(40,)),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(1, activation='sigmoid')
-        ])
-        
-        self.voice_model.compile(optimizer='adam',
-                               loss='binary_crossentropy',
-                               metrics=['accuracy'])
-        
-        # Prepare training data
-        X_train = self.scaler.transform(self.voice_features)
-        y_train = np.ones(len(X_train))  # All samples are genuine
-        
-        # Train the model
-        self.voice_model.fit(X_train, y_train, epochs=50, batch_size=1, verbose=0)
+        # Create and train the isolation forest model
+        self.voice_model = IsolationForest(contamination=0.1, random_state=42)
+        self.voice_model.fit(features_scaled)
         
         self.is_trained = True
         print("\nVoice model trained successfully!")
@@ -113,14 +94,14 @@ class VoiceImageAssistant:
         features = self.extract_voice_features(audio_data)
         features_scaled = self.scaler.transform([features])
         
-        # Get prediction from the model
-        prediction = self.voice_model.predict(features_scaled, verbose=0)[0][0]
+        # Get prediction from the model (-1 for anomaly, 1 for normal)
+        prediction = self.voice_model.predict(features_scaled)[0]
         
         # Calculate distance to training samples as additional verification
         distances = np.linalg.norm(self.voice_features - features_scaled, axis=1)
         distance_threshold = 0.5
         
-        return prediction > 0.5 and np.mean(distances) < distance_threshold
+        return prediction == 1 and np.mean(distances) < distance_threshold
     
     def add_image(self, image_path, label):
         """Add an image to the database with voice verification"""
