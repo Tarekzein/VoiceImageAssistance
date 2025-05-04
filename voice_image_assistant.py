@@ -23,6 +23,9 @@ class VoiceImageAssistant:
         self.scaler = StandardScaler()
         self.recognition_threshold = 0.3  # Lower threshold for better recognition
         
+        # Try to load existing model on startup
+        self.load_model()
+        
     def preprocess_audio(self, audio_data):
         """Preprocess audio data for better feature extraction"""
         # Ensure mono audio
@@ -242,6 +245,7 @@ class VoiceImageAssistant:
     def save_model(self):
         """Save the trained model and scaler"""
         if not self.is_trained:
+            print("No trained model to save!")
             return
             
         model_data = {
@@ -250,18 +254,29 @@ class VoiceImageAssistant:
             'labels': self.labels
         }
         
-        with open('voice_model.pkl', 'wb') as f:
-            pickle.dump(model_data, f)
+        try:
+            with open('voice_model.pkl', 'wb') as f:
+                pickle.dump(model_data, f)
+            print("Model saved successfully!")
+        except Exception as e:
+            print(f"Error saving model: {e}")
             
     def load_model(self):
         """Load a trained model"""
-        if os.path.exists('voice_model.pkl'):
-            with open('voice_model.pkl', 'rb') as f:
-                model_data = pickle.load(f)
-                self.model = model_data['model']
-                self.scaler = model_data['scaler']
-                self.labels = model_data['labels']
-                self.is_trained = True
+        try:
+            if os.path.exists('voice_model.pkl'):
+                with open('voice_model.pkl', 'rb') as f:
+                    model_data = pickle.load(f)
+                    self.model = model_data['model']
+                    self.scaler = model_data['scaler']
+                    self.labels = model_data['labels']
+                    self.is_trained = True
+                print("Model loaded successfully!")
+            else:
+                print("No saved model found. You'll need to train the model first.")
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            self.is_trained = False
 
 def main():
     assistant = VoiceImageAssistant()
